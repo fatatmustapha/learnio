@@ -108,4 +108,39 @@ export const getAllCoursesAdmin = (req, res) => {
 
     res.json(results);
   });
+}
+// ===============================
+// UPDATE COURSE
+// ===============================
+export const updateCourse = (req, res) => {
+  const { id } = req.params;
+  const { title, description, category, xp_reward } = req.body;
+
+  // Validation
+  if (!title || !description) {
+    return res.status(400).json({ message: "Missing data" });
+  }
+
+  const query = `
+    UPDATE courses
+    SET title = ?, description = ?, category = ?, xp_reward = ?
+    WHERE course_id = ?
+  `;
+
+  db.query(
+    query,
+    [title, description, category, xp_reward, id],
+    (err, result) => {
+      if (err) {
+        return res.status(500).json({ message: "Error updating course" });
+      }
+
+      // Check if course exists
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ message: "Course not found" });
+      }
+
+      res.json({ message: "Course updated successfully" });
+    }
+  );
 };

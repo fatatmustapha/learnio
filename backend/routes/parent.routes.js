@@ -4,16 +4,13 @@ import {
   getKidProgressForParent,
   resetKidPin,
 } from "../controllers/parent.controller.js";
+import { verifyToken, verifyRole } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
 
-// Get all kids
-router.get("/kids/:parentId", getKidsByParent);
+router.get("/kids/:parentId", verifyToken, verifyRole("parent"), getKidsByParent);
 
-// Get kid progress
-router.get("/progress/:kidId", getKidProgressForParent);
+router.get("/progress/:kidId", verifyToken, verifyRole("parent"), getKidProgressForParent);
 
-// Reset PIN
-router.put("/reset-pin", resetKidPin);
-
+router.put("/reset-pin", verifyToken, verifyRole("parent"), resetKidPin);
 export default router;

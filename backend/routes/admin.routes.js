@@ -1,25 +1,25 @@
 import express from "express";
 import {
   createCourseAdmin,
+  updateCourse, 
   createLesson,
   createQuiz,
   createQuestion,
   getAllCoursesAdmin,
 } from "../controllers/admin.controller.js";
+import { verifyToken, verifyRole } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
 
-// Courses
-router.post("/course", createCourseAdmin);
-router.get("/courses", getAllCoursesAdmin);
+router.post("/course", verifyToken, verifyRole("admin"), createCourseAdmin);
 
-// Lessons
-router.post("/lesson", createLesson);
+router.put("/course/:id", verifyToken, verifyRole("admin"), updateCourse);
 
-// Quiz
-router.post("/quiz", createQuiz);
+router.get("/courses", verifyToken, verifyRole("admin"), getAllCoursesAdmin);
 
-// Questions
-router.post("/question", createQuestion);
+router.post("/lesson", verifyToken, verifyRole("admin"), createLesson);
 
+router.post("/quiz", verifyToken, verifyRole("admin"), createQuiz);
+
+router.post("/question", verifyToken, verifyRole("admin"), createQuestion);
 export default router;
