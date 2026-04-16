@@ -9,6 +9,8 @@ import quizRoutes from "./routes/quiz.routes.js";
 import progressRoutes from "./routes/progress.routes.js";
 import gamificationRoutes from "./routes/gamification.routes.js";
 import parentRoutes from "./routes/parent.routes.js";
+import adminRoutes from "./routes/admin.routes.js";
+
 
 
 const app = express(); //my server object
@@ -22,6 +24,7 @@ app.use("/quiz", quizRoutes);
 app.use("/progress", progressRoutes);
 app.use("/gamification", gamificationRoutes);
 app.use("/parent", parentRoutes);
+app.use("/admin", adminRoutes);
 dotenv.config();
 
 // Test route
