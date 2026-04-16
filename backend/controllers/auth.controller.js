@@ -135,9 +135,15 @@ export const loginKid = async (req, res) => {
     }
 
     // Send success response
-    res.json({
-      message: "Kid login successful",
-      kid_id: kid.kid_id,
-    });
+    const token = jwt.sign(
+  { id: kid.kid_id, role: "kid" },
+  process.env.JWT_SECRET,
+  { expiresIn: "1h" }
+);
+
+res.json({
+  message: "Kid login successful",
+  token,
+});
   });
 };

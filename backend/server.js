@@ -10,7 +10,7 @@ import progressRoutes from "./routes/progress.routes.js";
 import gamificationRoutes from "./routes/gamification.routes.js";
 import parentRoutes from "./routes/parent.routes.js";
 import adminRoutes from "./routes/admin.routes.js";
-
+import kidRoutes from "./routes/kid.routes.js";
 
 
 const app = express(); //my server object
@@ -25,6 +25,7 @@ app.use("/progress", progressRoutes);
 app.use("/gamification", gamificationRoutes);
 app.use("/parent", parentRoutes);
 app.use("/admin", adminRoutes);
+app.use("/kid", kidRoutes);
 dotenv.config();
 
 // Test route
