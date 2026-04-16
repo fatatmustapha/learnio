@@ -1,4 +1,5 @@
 import db from "../config/db.js";
+import { unlockCourseBadge } from "./gamification.controller.js";
 
 // ===============================
 // UPDATE PROGRESS
@@ -10,15 +11,16 @@ export const updateProgress = (req, res) => {
     return res.status(400).json({ message: "Missing data" });
   }
 
-  // Get total lessons in course
-  const lessonQuery = "SELECT COUNT(*) AS total FROM lessons WHERE course_id = ?";
+  // Get total lessons
+  const lessonQuery =
+    "SELECT COUNT(*) AS total FROM lessons WHERE course_id = ?";
 
   db.query(lessonQuery, [course_id], (err, lessonResult) => {
     if (err) return res.status(500).json({ message: "Database error" });
 
     const totalLessons = lessonResult[0].total;
 
-    // Check current progress
+    // Get current progress
     const progressQuery = `
       SELECT * FROM progress WHERE kid_id = ? AND course_id = ?
     `;
@@ -31,8 +33,11 @@ export const updateProgress = (req, res) => {
       if (progressResult.length > 0) {
         completedLessons = progressResult[0].completed_lessons + 1;
       }
+      if (completed) {
+        unlockCourseBadge(kid_id, course_id);
+      }
 
-      // Calculate percentage
+      // Calculate %
       const percentage = (completedLessons / totalLessons) * 100;
       const completed = percentage >= 100;
 
@@ -59,7 +64,13 @@ export const updateProgress = (req, res) => {
           completed,
         ],
         (err) => {
-          if (err) return res.status(500).json({ message: "Error updating progress" });
+          if (err)
+            return res.status(500).json({ message: "Error updating progress" });
+
+          // IMPORTANT: Unlock badge ONLY if course completed
+          if (completed) {
+            unlockCourseBadge(kid_id, course_id);
+          }
 
           res.json({
             message: "Progress updated",
@@ -67,30 +78,43 @@ export const updateProgress = (req, res) => {
             percentage,
             completed,
           });
-        }
+        },
       );
     });
   });
-};
-
+}
 // ===============================
-// GET PROGRESS
+// UNLOCK BADGE PER COURSE
 // ===============================
-export const getKidProgress = (req, res) => {
-  const { kidId } = req.params;
-
-  const query = `
-    SELECT p.*, c.title
-    FROM progress p
-    JOIN courses c ON p.course_id = c.course_id
-    WHERE p.kid_id = ?
+const unlockCourseBadge = (kid_id, course_id) => {
+  // Get badge for this course
+  const badgeQuery = `
+    SELECT * FROM badges WHERE course_id = ?
   `;
 
-  db.query(query, [kidId], (err, results) => {
-    if (err) {
-      return res.status(500).json({ message: "Database error" });
-    }
+  db.query(badgeQuery, [course_id], (err, badges) => {
+    if (err || badges.length === 0) return;
 
-    res.json(results);
+    const badge = badges[0];
+
+    // Check if already earned
+    const checkQuery = `
+      SELECT * FROM kid_badges
+      WHERE kid_id = ? AND badge_id = ?
+    `;
+
+    db.query(checkQuery, [kid_id, badge.badge_id], (err, result) => {
+      if (err) return;
+
+      // If NOT earned → insert
+      if (result.length === 0) {
+        const insertQuery = `
+          INSERT INTO kid_badges (kid_id, badge_id)
+          VALUES (?, ?)
+        `;
+
+        db.query(insertQuery, [kid_id, badge.badge_id]);
+      }
+    });
   });
 };
