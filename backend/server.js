@@ -6,6 +6,8 @@ import dotenv from "dotenv";//read environment variables
 import authRoutes from "./routes/auth.routes.js";
 import courseRoutes from "./routes/course.routes.js";
 import quizRoutes from "./routes/quiz.routes.js";
+import progressRoutes from "./routes/progress.routes.js";
+
 
 
 
@@ -18,11 +20,12 @@ app.use(express.json());//allows server to read JSON from requests
 app.use("/auth", authRoutes);
 app.use("/courses", courseRoutes);
 app.use("/quiz", quizRoutes);
+app.use("/progress", progressRoutes);
 dotenv.config();
 
 // Test route
 app.get("/", (req, res) => {
-  res.send("🚀 Learnio API is running...");
+  res.send(" Learnio API is running...");
 });
 
 // Server start
