@@ -7,17 +7,12 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        primary: "#7CB98B",     // navbar green
-        primaryDark: "#5FA374",
-
-        accent: "#F5C044",      // yellow button
-        accentDark: "#E2AF30",
-
-        textMain: "#2F3E34",
-        textLight: "#6B7280",
-
-        bgLight: "#F9FAFB",
-        card: "#FFFFFF",
+        darkTeal: "#0F3D3E",
+        teal: "#1F7A8C",
+        green: "#2EC4B6",
+        yellow: "#FFD166",
+        red: "#F25F5C",
+        snow: "#F8FAFC",
       },
     },
   },

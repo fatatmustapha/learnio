@@ -1,50 +1,75 @@
+"use client";
+
+import Image from "next/image";
+
 export default function Hero() {
   return (
-    <section className="relative h-[70vh] flex items-center justify-center text-center text-white">
-      
+    <section className="relative h-[90vh] flex items-center justify-center text-center text-white overflow-hidden">
+
       {/* Background Image */}
       <div className="absolute inset-0">
-        <img
-          src="/hero.jpg"
+        <Image
+          src="/images/hero.jpg"
           alt="Hero Background"
-          className="object-cover w-full h-full"
+          fill
+          priority
+          className="object-cover"
         />
       </div>
 
-      {/* Overlay (dark layer) */}
-      <div className="absolute inset-0 bg-black/50"></div>
+      {/* Dark Overlay */}
+      <div className="absolute inset-0 bg-black/60"></div>
 
       {/* Content */}
-      <div className="relative z-10 max-w-2xl px-4">
-        
+      <div className="relative z-10 max-w-4xl px-6">
+
         {/* Title */}
-        <h1 className="mb-4 text-4xl font-bold md:text-5xl">
-          <span className="text-accent">Dream.</span>{" "}
-          <span className="text-primary">Learn.</span>{" "}
-          <span className="text-red-400">Grow.</span>
+        <h1 className="mb-6 text-5xl font-extrabold leading-tight md:text-7xl">
+          <span className="text-[color:var(--yellow)]">Dream.</span>{" "}
+          <span className="text-[color:var(--green)]">Learn.</span>{" "}
+          <span className="text-[color:var(--red)]">Grow.</span>
         </h1>
 
         {/* Subtitle */}
-        <p className="mb-6 text-lg text-gray-200">
-          Learnio teaches kids the foundations of financial literacy through
-          interactive courses, quizzes, and rewards — all in a safe,
-          parent-supervised environment.
+        <p className="mb-10 text-lg leading-relaxed text-gray-200 md:text-xl">
+          Learnio teaches kids through interactive lessons, quizzes, and rewards.
         </p>
 
         {/* Buttons */}
-        <div className="flex justify-center gap-4">
-          
-          {/* Parent Sign Up */}
-          <button className="px-6 py-2 text-white transition rounded-lg bg-accent hover:bg-accentDark">
-            Parent Sign Up
+        <div className="flex justify-center gap-6">
+
+          {/* SIGN UP */}
+          <button className="
+            px-8 py-3
+            text-lg
+            border-2
+            border-[color:var(--yellow)]
+            text-[color:var(--yellow)]
+            rounded-xl
+            transition-all duration-300
+            hover:bg-[color:var(--yellow)]
+            hover:text-black
+          ">
+            Sign Up
           </button>
 
-          {/* Login */}
-          <button className="px-6 py-2 transition border border-white rounded-lg hover:bg-white hover:text-black">
+          {/* LOGIN */}
+          <button className="
+            px-8 py-3
+            text-lg
+            border-2
+            border-[color:var(--red)]
+            text-[color:var(--red)]
+            rounded-xl
+            transition-all duration-300
+            hover:bg-[color:var(--red)]
+            hover:text-white
+          ">
             Login
           </button>
 
         </div>
+
       </div>
     </section>
   );
