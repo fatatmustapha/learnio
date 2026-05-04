@@ -11,7 +11,7 @@ type User = {
 } | null;
 
 /*  TEST USERS */
-const user: User = null;// const user: User = { role: "admin" }; to test it out
+const user: User = null; // const user: User = { role: "admin" }; to test it out
 
 export default function Navbar({
   type = "default",
@@ -21,26 +21,25 @@ export default function Navbar({
   return (
     <nav className="fixed top-0 left-0 w-full z-50 bg-[#2EC4B6] shadow-md">
       <div className="flex items-center justify-between w-full px-3 py-3">
-
-        {/* 🔹 LOGO */}
-        <div className="flex items-center ml-1">
+        {/*  LOGO */}
+        <Link
+          href="/"
+          className="flex items-center ml-1 transition cursor-pointer hover:opacity-80"
+        >
           <Image
             src="/images/logo.png"
-            alt="logo"
-            width={0}
-            height={0}
-            sizes="100vw"
+            alt="Learnio Logo"
+            width={120}
+            height={120}
             className="object-contain w-auto h-16"
+            priority
           />
-        </div>
+        </Link>
 
         {/*  RIGHT SIDE */}
         <div className="flex items-center gap-6 mr-1 text-sm font-bold">
-
           {/* ================= AUTH NAVBAR ================= */}
-          {type === "auth" && (
-            <NavItem href="/" label="Back to Home" />
-          )}
+          {type === "auth" && <NavItem href="/" label="Back to Home" />}
 
           {/* ================= DEFAULT NAVBAR ================= */}
           {type === "default" && (
@@ -106,13 +105,7 @@ export default function Navbar({
 //  NAV ITEM
 //////////////////////////////////////////////////////
 
-function NavItem({
-  href,
-  label,
-}: {
-  href: string;
-  label: string;
-}) {
+function NavItem({ href, label }: { href: string; label: string }) {
   return (
     <Link
       href={href}

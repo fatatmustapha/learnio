@@ -2,6 +2,7 @@ import Navbar from "@/components/shared/Navbar";
 import Hero from "@/components/home/Hero";
 import WhyLearnio from "@/components/home/WhyLearnio";
 import FeaturedCourses from "@/components/home/FeaturedCourses";
+import Link from "next/link";
 
 export default function Home() {
   return (
