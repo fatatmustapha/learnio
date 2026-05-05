@@ -1,18 +1,11 @@
-import mysql from "mysql2";
+import mysql from "mysql2/promise";
 
-const db = mysql.createConnection({
-  host: "localhost",
+const db = mysql.createPool({
+  host: "127.0.0.1",
   user: "root",
-  password: "", // change if you have password
+  password: "",
   database: "learnio_db",
-});
-
-db.connect((err) => {
-  if (err) {
-    console.error(" XX Database connection failed:", err);
-  } else {
-    console.log(" Connected to MySQL database !!");
-  }
+  port: 3306,
 });
 
 export default db;

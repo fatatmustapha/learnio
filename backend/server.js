@@ -13,7 +13,7 @@ import gamificationRoutes from "./routes/gamification.routes.js";
 import parentRoutes from "./routes/parent.routes.js";
 import adminRoutes from "./routes/admin.routes.js";
 import kidRoutes from "./routes/kid.routes.js";
-
+import categoryRoutes from "./routes/category.routes.js";
 dotenv.config();
 
 const app = express();
@@ -38,6 +38,7 @@ app.use("/api/gamification", gamificationRoutes);
 app.use("/api/parent", parentRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/kid", kidRoutes);
+app.use("/api/categories", categoryRoutes);
 
 // TEST
 app.get("/", (req, res) => {
