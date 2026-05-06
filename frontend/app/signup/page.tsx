@@ -2,8 +2,11 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 export default function SignupPage() {
+  const router = useRouter();
+
   const [form, setForm] = useState({
     full_name: "",
     email: "",
@@ -13,31 +16,56 @@ export default function SignupPage() {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleChange = (e: any) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setForm({
+      ...form,
+      [e.target.name]: e.target.value,
+    });
   };
 
-  const handleSubmit = async (e: any) => {
+  const handleSubmit = async (
+    e: React.FormEvent<HTMLFormElement>
+  ) => {
     e.preventDefault();
+
     setLoading(true);
     setMessage("");
 
     try {
-      const res = await fetch("http://localhost:5000/api/auth/signup", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
+      const res = await fetch(
+        "http://localhost:5000/api/auth/register",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(form),
+        }
+      );
 
       const data = await res.json();
 
       if (res.ok) {
-        setMessage("Account created! Check your email to verify.");
-        setForm({ full_name: "", email: "", password: "" });
+        localStorage.setItem(
+          "user",
+          JSON.stringify(data.user)
+        );
+
+        localStorage.setItem(
+          "token",
+          data.token
+        );
+
+        setMessage("Account created successfully!");
+
+        setTimeout(() => {
+          router.push("/parent/dashboard");
+        }, 1000);
       } else {
         setMessage(data.message || "Something went wrong");
       }
-    } catch {
+    } catch (error) {
+      console.error(error);
       setMessage("Server error. Try again.");
     }
 
@@ -46,22 +74,24 @@ export default function SignupPage() {
 
   return (
     <div className="min-h-screen bg-[#FDF8F3] flex items-center justify-center px-4">
-      
-      {/* MAIN CARD */}
-      <div className="w-full max-w-5xl h-[520px] bg-white rounded-2xl shadow-lg flex overflow-hidden">
+      <div className="w-full max-w-5xl h-[570px] bg-white rounded-3xl shadow-lg overflow-hidden flex">
         
         {/* LEFT SIDE */}
         <div className="flex flex-col justify-center w-full p-10 md:w-1/2">
-          <h2 className="text-2xl font-bold text-[#0F3D3E] mb-2">
+          
+          <h1 className="text-4xl font-bold text-[#0F3D3E] mb-3">
             Create Your Account
-          </h2>
+          </h1>
 
-          <p className="mb-6 text-gray-500">
+          <p className="mb-8 text-gray-500">
             Start your child’s learning journey
           </p>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            
+          {/* IMPORTANT */}
+          <form
+            onSubmit={handleSubmit}
+            className="space-y-5"
+          >
             <input
               type="text"
               name="full_name"
@@ -69,11 +99,7 @@ export default function SignupPage() {
               value={form.full_name}
               onChange={handleChange}
               required
-              className="w-full p-3 border rounded-lg 
-                         focus:outline-none 
-                         focus:ring-2 focus:ring-[#FFD166]
-                         focus:border-[#FFD166]
-                         transition-all duration-200"
+              className="w-full border border-gray-300 rounded-xl px-5 py-4 outline-none focus:ring-2 focus:ring-[#FFD166]"
             />
 
             <input
@@ -83,11 +109,7 @@ export default function SignupPage() {
               value={form.email}
               onChange={handleChange}
               required
-              className="w-full p-3 border rounded-lg 
-                         focus:outline-none 
-                         focus:ring-2 focus:ring-[#FFD166]
-                         focus:border-[#FFD166]
-                         transition-all duration-200"
+              className="w-full border border-gray-300 rounded-xl px-5 py-4 outline-none focus:ring-2 focus:ring-[#FFD166]"
             />
 
             <input
@@ -97,48 +119,42 @@ export default function SignupPage() {
               value={form.password}
               onChange={handleChange}
               required
-              className="w-full p-3 border rounded-lg 
-                         focus:outline-none 
-                         focus:ring-2 focus:ring-[#FFD166]
-                         focus:border-[#FFD166]
-                         transition-all duration-200"
+              className="w-full border border-gray-300 rounded-xl px-5 py-4 outline-none focus:ring-2 focus:ring-[#FFD166]"
             />
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-[#FFD166] text-[#0F3D3E] py-3 rounded-lg font-semibold
-                         hover:bg-[#F5A962] hover:shadow-lg hover:scale-[1.02]
-                         active:scale-[0.97]
-                         transition-all duration-300"
+              className="w-full bg-[#FFD166] hover:bg-[#f5c84c] transition-all duration-300 text-[#0F3D3E] font-semibold py-4 rounded-xl"
             >
               {loading ? "Creating..." : "Sign Up"}
             </button>
           </form>
 
           {message && (
-            <p className="mt-4 text-sm text-center text-[#0F3D3E] font-medium">
+            <p className="mt-5 text-center text-[#0F3D3E] font-medium">
               {message}
             </p>
           )}
 
-          <p className="mt-6 text-sm text-center">
+          <p className="mt-8 text-center text-gray-600">
             Already have an account?{" "}
-            <Link href="/login" className="text-[#F5A962] font-semibold hover:underline">
+            <Link
+              href="/login"
+              className="text-[#F5A962] font-semibold hover:underline"
+            >
               Login
             </Link>
           </p>
         </div>
 
-        {/* RIGHT SIDE — FINAL FIX */}
-        <div className="relative hidden w-1/2 h-full md:block">
-          
+        {/* RIGHT SIDE */}
+        <div className="relative hidden md:block md:w-1/2">
           <img
             src="/images/signup-illustration.png"
-            alt="signup"
-            className="absolute inset-0 object-cover w-full h-full"
+            alt="Signup"
+            className="object-cover w-full h-full"
           />
-
         </div>
       </div>
     </div>

@@ -4,72 +4,102 @@ import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import nodemailer from "nodemailer";
 
-// ===============================
 // REGISTER PARENT
-// ===============================
 export const registerParent = async (req, res) => {
-  const { name, email, password } = req.body;
+  const { full_name, email, password } = req.body;
 
-  if (!name || !email || !password) {
+  if (!full_name || !email || !password) {
     return res.status(400).json({ message: "All fields are required" });
   }
 
   try {
-    const checkQuery = "SELECT * FROM parents WHERE email = ?";
+    const [existingParent] = await db.query(
+      "SELECT * FROM parents WHERE email = ?",
+      [email]
+    );
 
-    db.query(checkQuery, [email], async (err, results) => {
-      if (err) {
-        return res.status(500).json({ message: "Database error" });
-      }
+    if (existingParent.length > 0) {
+      return res.status(400).json({ message: "Email already exists" });
+    }
 
-      if (results.length > 0) {
-        return res.status(400).json({ message: "Email already exists" });
-      }
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-      const hashedPassword = await bcrypt.hash(password, 10);
+    const [result] = await db.query(
+      `
+      INSERT INTO parents (name, email, password_hash)
+      VALUES (?, ?, ?)
+      `,
+      [full_name, email, hashedPassword]
+    );
 
-      const insertQuery = `
-        INSERT INTO parents (name, email, password_hash)
-        VALUES (?, ?, ?)
-      `;
+    const token = jwt.sign(
+      { id: result.insertId, role: "parent" },
+      process.env.JWT_SECRET || "learniosecret",
+      { expiresIn: "7d" }
+    );
 
-      db.query(insertQuery, [name, email, hashedPassword], (err, result) => {
-        if (err) {
-          return res.status(500).json({ message: "Error registering parent" });
-        }
-
-        res.json({ message: "Parent registered successfully" });
+    try {
+      const transporter = nodemailer.createTransport({
+        service: "gmail",
+        auth: {
+          user: process.env.EMAIL_USER,
+          pass: process.env.EMAIL_PASS,
+        },
       });
-    });
 
+      await transporter.sendMail({
+        from: `"Learnio" <${process.env.EMAIL_USER}>`,
+        to: email,
+        subject: "Welcome to Learnio!",
+        html: `
+          <div style="font-family: Arial, sans-serif; padding: 20px;">
+            <h2 style="color:#0F3D3E;">Welcome to Learnio 🎉</h2>
+            <p>Hi ${full_name},</p>
+            <p>Your parent account has been created successfully.</p>
+            <p>Your child’s learning journey starts now!</p>
+            <p style="margin-top:20px;">— Learnio Team</p>
+          </div>
+        `,
+      });
+    } catch (emailError) {
+      console.log("WELCOME EMAIL ERROR:", emailError.message);
+    }
+
+    return res.status(201).json({
+      message: "Parent registered successfully",
+      token,
+      user: {
+        parent_id: result.insertId,
+        full_name,
+        email,
+        role: "parent",
+      },
+    });
   } catch (error) {
-    res.status(500).json({ message: "Server error" });
+    console.error("REGISTER ERROR:", error);
+    return res.status(500).json({ message: "Server error" });
   }
 };
 
-// ===============================
 // LOGIN PARENT
-// ===============================
-export const loginParent = (req, res) => {
+export const loginParent = async (req, res) => {
   const { email, password } = req.body;
 
   if (!email || !password) {
     return res.status(400).json({ message: "All fields are required" });
   }
 
-  const query = `SELECT * FROM parents WHERE email = ?`;
+  try {
+    const [parents] = await db.query(
+      "SELECT * FROM parents WHERE email = ?",
+      [email]
+    );
 
-  db.query(query, [email], async (err, results) => {
-
-    if (err) {
-      return res.status(500).json({ message: "Database error" });
-    }
-
-    if (results.length === 0) {
+    if (parents.length === 0) {
       return res.status(400).json({ message: "Invalid email or password" });
     }
 
-    const parent = results[0];
+    const parent = parents[0];
 
     const isMatch = await bcrypt.compare(password, parent.password_hash);
 
@@ -79,17 +109,27 @@ export const loginParent = (req, res) => {
 
     const token = jwt.sign(
       { id: parent.parent_id, role: "parent" },
-      process.env.JWT_SECRET,
-      { expiresIn: "1h" }
+      process.env.JWT_SECRET || "learniosecret",
+      { expiresIn: "7d" }
     );
 
-    res.json({ message: "Login successful", token });
-  });
+    return res.json({
+      message: "Login successful",
+      token,
+      user: {
+        parent_id: parent.parent_id,
+        full_name: parent.name,
+        email: parent.email,
+        role: "parent",
+      },
+    });
+  } catch (error) {
+    console.error("LOGIN PARENT ERROR:", error);
+    return res.status(500).json({ message: "Server error" });
+  }
 };
 
-// ===============================
-// LOGIN KID (PIN)
-// ===============================
+// LOGIN KID
 export const loginKid = async (req, res) => {
   const { username, pin } = req.body;
 
@@ -97,19 +137,16 @@ export const loginKid = async (req, res) => {
     return res.status(400).json({ message: "Username and PIN are required" });
   }
 
-  const query = `SELECT * FROM kids WHERE username = ?`;
+  try {
+    const [kids] = await db.query("SELECT * FROM kids WHERE username = ?", [
+      username,
+    ]);
 
-  db.query(query, [username], async (err, results) => {
-
-    if (err) {
-      return res.status(500).json({ message: "Database error" });
-    }
-
-    if (results.length === 0) {
+    if (kids.length === 0) {
       return res.status(400).json({ message: "Invalid username or PIN" });
     }
 
-    const kid = results[0];
+    const kid = kids[0];
 
     const isMatch = await bcrypt.compare(pin, kid.pin_hash);
 
@@ -119,42 +156,53 @@ export const loginKid = async (req, res) => {
 
     const token = jwt.sign(
       { id: kid.kid_id, role: "kid" },
-      process.env.JWT_SECRET,
-      { expiresIn: "1h" }
+      process.env.JWT_SECRET || "learniosecret",
+      { expiresIn: "7d" }
     );
 
-    res.json({
+    return res.json({
       message: "Kid login successful",
       token,
+      user: {
+        kid_id: kid.kid_id,
+        parent_id: kid.parent_id,
+        username: kid.username,
+        role: "kid",
+      },
     });
-  });
+  } catch (error) {
+    console.error("LOGIN KID ERROR:", error);
+    return res.status(500).json({ message: "Server error" });
+  }
 };
 
-
-
-// =====================================
-//  FORGOT PASSWORD (SEND EMAIL)
-// =====================================
-export const forgotPassword = (req, res) => {
+// FORGOT PASSWORD
+export const forgotPassword = async (req, res) => {
   const { email } = req.body;
 
-  db.query("SELECT * FROM parents WHERE email = ?", [email], async (err, results) => {
+  if (!email) {
+    return res.status(400).json({ message: "Email is required" });
+  }
 
-    if (err) return res.status(500).json({ message: "Database error" });
+  try {
+    const [parents] = await db.query(
+      "SELECT * FROM parents WHERE email = ?",
+      [email]
+    );
 
-    if (results.length === 0) {
+    if (parents.length === 0) {
       return res.status(404).json({ message: "Email not found" });
     }
 
     const token = crypto.randomBytes(32).toString("hex");
 
-    // Save token in DB
-    db.query(
-      "UPDATE parents SET reset_token = ? WHERE email = ?",
-      [token, email]
-    );
+    await db.query("UPDATE parents SET reset_token = ? WHERE email = ?", [
+      token,
+      email,
+    ]);
 
-    // Email setup
+    const resetLink = `http://localhost:3000/reset-password/${token}`;
+
     const transporter = nodemailer.createTransport({
       service: "gmail",
       auth: {
@@ -163,45 +211,60 @@ export const forgotPassword = (req, res) => {
       },
     });
 
-    const resetLink = `http://localhost:3000/reset-password/${token}`;
-
     await transporter.sendMail({
-      from: "Learnio",
+      from: `"Learnio" <${process.env.EMAIL_USER}>`,
       to: email,
-      subject: "Reset Your Password",
+      subject: "Reset Your Learnio Password",
       html: `
-        <p>You requested a password reset.</p>
-        <p>Click below to reset:</p>
-        <a href="${resetLink}">${resetLink}</a>
+        <div style="font-family: Arial, sans-serif; padding: 20px;">
+          <h2 style="color:#0F3D3E;">Reset Your Password</h2>
+          <p>You requested a password reset.</p>
+          <p>Click the link below to reset your password:</p>
+          <a href="${resetLink}" style="color:#0F3D3E;">${resetLink}</a>
+        </div>
       `,
     });
 
-    res.json({ message: "Reset email sent" });
-  });
+    return res.json({ message: "Reset email sent" });
+  } catch (error) {
+    console.error("FORGOT PASSWORD ERROR:", error);
+    return res.status(500).json({ message: "Server error" });
+  }
 };
 
-
-
-// =====================================
 // RESET PASSWORD
-// =====================================
 export const resetPassword = async (req, res) => {
   const { token } = req.params;
   const { password } = req.body;
 
-  const hashedPassword = await bcrypt.hash(password, 10);
+  if (!token || !password) {
+    return res.status(400).json({ message: "Token and password are required" });
+  }
 
-  db.query(
-    "UPDATE parents SET password_hash = ?, reset_token = NULL WHERE reset_token = ?",
-    [hashedPassword, token],
-    (err, result) => {
-      if (err) return res.status(500).json({ message: "Error resetting password" });
+  try {
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-      res.json({ message: "Password updated successfully" });
+    const [result] = await db.query(
+      `
+      UPDATE parents
+      SET password_hash = ?, reset_token = NULL
+      WHERE reset_token = ?
+      `,
+      [hashedPassword, token]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(400).json({ message: "Invalid or expired token" });
     }
-  );
+
+    return res.json({ message: "Password updated successfully" });
+  } catch (error) {
+    console.error("RESET PASSWORD ERROR:", error);
+    return res.status(500).json({ message: "Server error" });
+  }
 };
 
+// FORGOT PIN
 export const forgotPin = async (req, res) => {
   const { email } = req.body;
 
@@ -209,46 +272,7 @@ export const forgotPin = async (req, res) => {
     return res.status(400).json({ message: "Email is required" });
   }
 
-  try {
-    // Check if parent exists
-    db.query(
-      "SELECT * FROM parents WHERE email = ?",
-      [email],
-      (err, results) => {
-        if (err) {
-          return res.status(500).json({ message: "Database error" });
-        }
-
-        if (results.length === 0) {
-          return res.status(404).json({ message: "Parent not found" });
-        }
-
-        // Generate reset token
-        const token = Math.random().toString(36).substring(2, 15);
-
-        const expiry = new Date(Date.now() + 15 * 60 * 1000); // 15 min
-
-        // Save token
-        db.query(
-          "UPDATE parents SET reset_token = ?, reset_token_expiry = ? WHERE email = ?",
-          [token, expiry, email],
-          async (err2) => {
-            if (err2) {
-              return res.status(500).json({ message: "Error saving token" });
-            }
-
-            // Send email (SIMPLIFIED)
-            console.log("PIN reset link:");
-            console.log(`http://localhost:3000/reset-pin/${token}`);
-
-            res.json({
-              message: "Reset PIN link sent to your email",
-            });
-          }
-        );
-      }
-    );
-  } catch (error) {
-    res.status(500).json({ message: "Server error" });
-  }
+  return res.json({
+    message: "Forgot PIN feature will be connected later",
+  });
 };
