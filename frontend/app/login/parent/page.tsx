@@ -1,17 +1,24 @@
 "use client";
-//parent login
+// parent login
+
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import React from "react";
 
-export default function LoginPage() {
+export default function ParentLoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+
+  const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
+
   const router = useRouter();
 
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+
+    setLoading(true);
+    setMessage("");
 
     try {
       const res = await fetch("http://localhost:5000/api/auth/login-parent", {
@@ -25,36 +32,38 @@ export default function LoginPage() {
       const data = await res.json();
 
       if (res.ok) {
-        alert("Login successful!");
-
-        // Save token (important for later)
         localStorage.setItem("token", data.token);
+        localStorage.setItem("user", JSON.stringify(data.user));
 
-        // Redirect to dashboard (you can change this later)
-        router.push("/");
+        setMessage("Login successful!");
+
+        setTimeout(() => {
+          router.push("/parent/dashboard");
+        }, 600);
       } else {
-        alert(data.message || "Login failed");
+        setMessage(data.message || "Login failed");
       }
     } catch (err) {
       console.error(err);
-      alert("Server error");
+      setMessage("Server error. Try again.");
     }
+
+    setLoading(false);
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#FDF8F3] px-4">
       <div className="flex w-full max-w-5xl overflow-hidden bg-white shadow-lg rounded-2xl">
-        {/* LEFT SIDE FORM */}
         <div className="w-full p-10 md:w-1/2">
           <h2 className="text-2xl font-bold text-[#2F3E34] mb-2">
             Welcome Back
           </h2>
+
           <p className="mb-6 text-gray-500">
             Login to continue your child’s learning journey
           </p>
 
           <form onSubmit={handleLogin} className="space-y-4">
-            {/* EMAIL */}
             <input
               type="email"
               placeholder="Email"
@@ -64,7 +73,6 @@ export default function LoginPage() {
               required
             />
 
-            {/* PASSWORD */}
             <input
               type="password"
               placeholder="Password"
@@ -74,7 +82,6 @@ export default function LoginPage() {
               required
             />
 
-            {/* FORGOT PASSWORD */}
             <div className="text-right">
               <Link
                 href="/forgot-password"
@@ -84,16 +91,21 @@ export default function LoginPage() {
               </Link>
             </div>
 
-            {/* LOGIN BUTTON */}
             <button
               type="submit"
-              className="w-full bg-[#FFD166] text-[#2F3E34] py-3 rounded-lg font-semibold hover:bg-[#e6b84d] active:scale-95 transition"
+              disabled={loading}
+              className="w-full bg-[#FFD166] text-[#2F3E34] py-3 rounded-lg font-semibold hover:bg-[#e6b84d] active:scale-95 transition disabled:opacity-70"
             >
-              Login
+              {loading ? "Logging in..." : "Login"}
             </button>
           </form>
 
-          {/* SIGNUP */}
+          {message && (
+            <p className="mt-4 text-sm text-center text-[#0F3D3E] font-medium">
+              {message}
+            </p>
+          )}
+
           <p className="mt-6 text-sm text-center text-gray-500">
             Don’t have an account?{" "}
             <Link
@@ -105,7 +117,6 @@ export default function LoginPage() {
           </p>
         </div>
 
-        {/* RIGHT SIDE IMAGE */}
         <div className="hidden md:flex w-1/2 bg-[#FDF8F3] items-center justify-center">
           <img
             src="/images/login-parent.png"

@@ -4,7 +4,6 @@ import db from "../config/db.js";
 export const getCourses = async (req, res) => {
   try {
     const [courses] = await db.query("SELECT * FROM courses");
-
     res.json(courses);
   } catch (error) {
     console.error("ERROR FETCHING COURSES:", error);
@@ -17,29 +16,22 @@ export const getCourseDetails = async (req, res) => {
   try {
     const courseId = Number(req.params.id);
 
-    // COURSE
     const [courseRows] = await db.query(
       `
-      SELECT 
-        courses.*,
-        categories.category_name
+      SELECT courses.*, categories.category_name
       FROM courses
-      LEFT JOIN categories
-      ON courses.category_id = categories.category_id
+      LEFT JOIN categories ON courses.category_id = categories.category_id
       WHERE courses.course_id = ?
       `,
       [courseId]
     );
 
     if (courseRows.length === 0) {
-      return res.status(404).json({
-        message: "Course not found",
-      });
+      return res.status(404).json({ message: "Course not found" });
     }
 
     const course = courseRows[0];
 
-    // CHAPTERS
     const [chapters] = await db.query(
       `
       SELECT *
@@ -50,7 +42,6 @@ export const getCourseDetails = async (req, res) => {
       [courseId]
     );
 
-    // LESSONS
     const [lessons] = await db.query(
       `
       SELECT *
@@ -61,30 +52,24 @@ export const getCourseDetails = async (req, res) => {
       [courseId]
     );
 
-    // QUIZZES
     const [quizzes] = await db.query(
       `
       SELECT *
       FROM quizzes
       WHERE chapter_id IN (
-        SELECT chapter_id
-        FROM chapters
-        WHERE course_id = ?
+        SELECT chapter_id FROM chapters WHERE course_id = ?
       )
       `,
       [courseId]
     );
 
-    // COMBINE DATA
     const chaptersWithContent = chapters.map((chapter) => {
       const chapterLessons = lessons.filter(
-        (lesson) =>
-          Number(lesson.chapter_id) === Number(chapter.chapter_id)
+        (lesson) => Number(lesson.chapter_id) === Number(chapter.chapter_id)
       );
 
       const chapterQuiz = quizzes.find(
-        (quiz) =>
-          Number(quiz.chapter_id) === Number(chapter.chapter_id)
+        (quiz) => Number(quiz.chapter_id) === Number(chapter.chapter_id)
       );
 
       return {
@@ -100,9 +85,51 @@ export const getCourseDetails = async (req, res) => {
     });
   } catch (error) {
     console.error("ERROR FETCHING COURSE DETAILS:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
 
-    res.status(500).json({
-      message: "Server error",
+// ENROLL COURSE
+export const enrollCourse = async (req, res) => {
+  try {
+    const { kid_id, course_id } = req.body;
+
+    if (!kid_id || !course_id) {
+      return res.status(400).json({
+        message: "kid_id and course_id are required",
+      });
+    }
+
+    const [existing] = await db.query(
+      `
+      SELECT progress_id
+      FROM progress
+      WHERE kid_id = ? AND course_id = ?
+      `,
+      [kid_id, course_id]
+    );
+
+    if (existing.length > 0) {
+      return res.status(400).json({
+        message: "This course is already enrolled for this child.",
+      });
+    }
+
+    await db.query(
+      `
+      INSERT INTO progress
+      (kid_id, course_id, completed_lessons, progress_percent, completed)
+      VALUES (?, ?, 0, 0, 0)
+      `,
+      [kid_id, course_id]
+    );
+
+    res.json({
+      success: true,
+      message: "Course enrolled successfully",
     });
+  } catch (error) {
+    console.error("ENROLL COURSE ERROR:", error);
+    res.status(500).json({ message: "Server error" });
   }
 };

@@ -1,17 +1,19 @@
 import express from "express";
+
 import {
   getKidProfile,
   getKidDashboard,
+  getKidAchievements,
 } from "../controllers/kid.controller.js";
 
 import { verifyToken, verifyRole } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
 
-// Kid profile
 router.get("/profile", verifyToken, verifyRole("kid"), getKidProfile);
 
-// Kid dashboard
 router.get("/dashboard", verifyToken, verifyRole("kid"), getKidDashboard);
+
+router.get("/achievements", verifyToken, verifyRole("kid"), getKidAchievements);
 
 export default router;

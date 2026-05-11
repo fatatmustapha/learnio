@@ -2,12 +2,16 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 export default function KidLoginPage() {
+  const router = useRouter();
+
   const [username, setUsername] = useState("");
   const [pin, setPin] = useState(["", "", "", ""]);
+  const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  // Handle PIN input
   const handlePinChange = (value: string, index: number) => {
     if (!/^[0-9]?$/.test(value)) return;
 
@@ -15,17 +19,23 @@ export default function KidLoginPage() {
     newPin[index] = value;
     setPin(newPin);
 
-    // Auto move to next input
     if (value && index < 3) {
-      const next = document.getElementById(`pin-${index + 1}`);
-      next?.focus();
+      document.getElementById(`pin-${index + 1}`)?.focus();
     }
   };
 
-  const handleLogin = async (e: any) => {
+  const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     const fullPin = pin.join("");
+
+    if (fullPin.length !== 4) {
+      setMessage("Please enter your 4-digit PIN.");
+      return;
+    }
+
+    setLoading(true);
+    setMessage("");
 
     try {
       const res = await fetch("http://localhost:5000/api/auth/login-kid", {
@@ -33,33 +43,47 @@ export default function KidLoginPage() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ username, pin: fullPin }),
+        body: JSON.stringify({
+          username,
+          pin: fullPin,
+        }),
       });
 
       const data = await res.json();
 
       if (res.ok) {
-        alert("Welcome back! 🎉");
+        localStorage.setItem("token", data.token);
+        localStorage.setItem("user", JSON.stringify(data.user));
+
+        setMessage("Welcome back! 🎉");
+
+        setTimeout(() => {
+          router.push("/kid/dashboard");
+        }, 700);
       } else {
-        alert(data.message || "Wrong PIN 😢");
+        setMessage(data.message || "Wrong username or PIN.");
       }
-    } catch (err) {
-      console.error(err);
-      alert("Server error");
+    } catch (error) {
+      console.error(error);
+      setMessage("Server error. Try again.");
     }
+
+    setLoading(false);
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#FDF8F3] px-4">
       <div className="flex w-full max-w-5xl overflow-hidden bg-white shadow-lg rounded-2xl">
-        {/* LEFT SIDE (FORM) */}
         <div className="w-full p-10 md:w-1/2">
-          <h2 className="text-2xl font-bold text-[#2F3E34] mb-2">Kid Login</h2>
+          <h2 className="text-2xl font-bold text-[#2F3E34] mb-2">
+            Kid Login
+          </h2>
 
-          <p className="mb-6 text-gray-500">Enter your username and PIN</p>
+          <p className="mb-6 text-gray-500">
+            Enter your username and PIN
+          </p>
 
           <form onSubmit={handleLogin} className="space-y-5">
-            {/* USERNAME */}
             <input
               type="text"
               placeholder="Username"
@@ -69,22 +93,22 @@ export default function KidLoginPage() {
               required
             />
 
-            {/* PIN INPUT */}
             <div className="flex justify-center gap-3">
               {pin.map((digit, index) => (
                 <input
                   key={index}
                   id={`pin-${index}`}
                   type="text"
+                  inputMode="numeric"
                   maxLength={1}
                   value={digit}
                   onChange={(e) => handlePinChange(e.target.value, index)}
                   className="w-14 h-14 text-center text-xl border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#FFD166]"
+                  required
                 />
               ))}
             </div>
 
-            {/* FORGOT PIN */}
             <div className="text-right">
               <Link
                 href="/forgot-pin"
@@ -94,17 +118,22 @@ export default function KidLoginPage() {
               </Link>
             </div>
 
-            {/* BUTTON */}
             <button
               type="submit"
-              className="w-full bg-[#FFD166] text-[#2F3E34] py-3 rounded-lg font-semibold hover:bg-[#e6b84d] transition"
+              disabled={loading}
+              className="w-full bg-[#FFD166] text-[#2F3E34] py-3 rounded-lg font-semibold hover:bg-[#e6b84d] transition disabled:opacity-70"
             >
-              Let’s Go! 🚀
+              {loading ? "Logging in..." : "Let’s Go! 🚀"}
             </button>
           </form>
+
+          {message && (
+            <p className="mt-4 text-sm text-center text-[#0F3D3E] font-medium">
+              {message}
+            </p>
+          )}
         </div>
 
-        {/* RIGHT SIDE (IMAGE) */}
         <div className="hidden md:flex w-1/2 bg-[#FDF8F3] items-center justify-center">
           <img
             src="/images/login-kid.png"

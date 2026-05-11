@@ -21,8 +21,14 @@ type Course = {
   course_id: number;
   title: string;
   description: string;
-  image_url: string;
+  image_url: string | null;
   category_name: string;
+};
+
+type Kid = {
+  kid_id: number;
+  child_name?: string;
+  username: string;
 };
 
 export default function CourseDetailsPage() {
@@ -32,7 +38,15 @@ export default function CourseDetailsPage() {
   const [course, setCourse] = useState<Course | null>(null);
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [openChapter, setOpenChapter] = useState<number | null>(null);
+
+  const [kids, setKids] = useState<Kid[]>([]);
+  const [selectedKidId, setSelectedKidId] = useState("");
+  const [showKidPicker, setShowKidPicker] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+
+  const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
+  const [enrolling, setEnrolling] = useState(false);
 
   useEffect(() => {
     const fetchCourse = async () => {
@@ -55,15 +69,104 @@ export default function CourseDetailsPage() {
     fetchCourse();
   }, [params.id]);
 
-  const handleEnroll = () => {
-    const user = localStorage.getItem("user");
+  const getImageUrl = (img: string | null) => {
+    if (!img) return "/placeholder.png";
+    if (img.startsWith("http")) return img;
+    return `http://localhost:5000${img}`;
+  };
 
-    if (!user) {
-      router.push("/login");
+  const selectedKid = kids.find(
+    (kid) => String(kid.kid_id) === String(selectedKidId)
+  );
+
+  const enrollCourseForKid = async (kidId: number, redirectPath: string) => {
+    if (!course) return;
+
+    setEnrolling(true);
+    setMessage("");
+
+    try {
+      const res = await fetch("http://localhost:5000/api/courses/enroll", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          kid_id: kidId,
+          course_id: course.course_id,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setMessage(data.message || "Enrollment failed.");
+        return;
+      }
+
+      setMessage("Course assigned successfully!");
+
+      setTimeout(() => {
+        router.push(redirectPath);
+      }, 800);
+    } catch (error) {
+      console.error(error);
+      setMessage("Server error. Try again.");
+    } finally {
+      setEnrolling(false);
+    }
+  };
+
+  const handleEnroll = async () => {
+    const userRaw = localStorage.getItem("user");
+    const token = localStorage.getItem("token");
+
+    if (!userRaw) {
+      router.push("/signup");
       return;
     }
 
-    alert("Enrollment system will be added later.");
+    const user = JSON.parse(userRaw);
+
+    if (user.role === "kid") {
+      await enrollCourseForKid(user.kid_id, "/kid/dashboard");
+      return;
+    }
+
+    if (user.role === "parent") {
+      if (!token) {
+        router.push("/login/parent");
+        return;
+      }
+
+      try {
+        const res = await fetch(
+          `http://localhost:5000/api/parent/kids/${user.parent_id}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          setMessage(data.message || "Could not load children.");
+          return;
+        }
+
+        setKids(Array.isArray(data) ? data : []);
+        setShowKidPicker(true);
+      } catch (error) {
+        console.error(error);
+        setMessage("Could not load children.");
+      }
+
+      return;
+    }
+
+    router.push("/signup");
   };
 
   if (loading) {
@@ -86,8 +189,7 @@ export default function CourseDetailsPage() {
     );
   }
 
-  const chapterXP =
-    chapters.length > 0 ? Math.round(50 / chapters.length) : 0;
+  const chapterXP = chapters.length > 0 ? Math.round(50 / chapters.length) : 0;
 
   const getLessonXP = (lessonsCount: number) => {
     if (lessonsCount === 0) return 0;
@@ -101,19 +203,16 @@ export default function CourseDetailsPage() {
   return (
     <main className="min-h-screen bg-[#F8FAFC] pt-32 px-6 pb-20">
       <div className="max-w-6xl mx-auto">
-        {/* TOP CARD */}
-        <section className="bg-white rounded-[32px] shadow-md border border-gray-100 overflow-hidden mb-12">
+        <section className="bg-white rounded-[32px] shadow-md border border-gray-100 overflow-hidden mb-8">
           <div className="grid grid-cols-1 lg:grid-cols-2">
-            {/* IMAGE */}
             <div className="h-[430px] overflow-hidden">
               <img
-                src={`http://localhost:5000${course.image_url}`}
+                src={getImageUrl(course.image_url)}
                 alt={course.title}
                 className="object-cover w-full h-full"
               />
             </div>
 
-            {/* CONTENT */}
             <div className="flex flex-col justify-between p-10">
               <div>
                 <span className="inline-block bg-[#FFD166]/25 text-[#B88700] px-4 py-1 rounded-full text-sm font-semibold mb-5">
@@ -133,17 +232,13 @@ export default function CourseDetailsPage() {
                     <p className="text-sm font-semibold text-[#0F3D3E]">
                       Total Chapters
                     </p>
-
-                    <p className="text-lg text-gray-600">
-                      {chapters.length}
-                    </p>
+                    <p className="text-lg text-gray-600">{chapters.length}</p>
                   </div>
 
                   <div className="bg-[#E8F7F6] rounded-2xl p-4">
                     <p className="text-sm font-semibold text-[#0F3D3E]">
                       Total XP
                     </p>
-
                     <p className="text-lg text-gray-600">50 XP</p>
                   </div>
                 </div>
@@ -151,15 +246,115 @@ export default function CourseDetailsPage() {
 
               <button
                 onClick={handleEnroll}
-                className="w-full bg-[#FFD166] hover:bg-[#e6ba56] transition-all duration-300 text-[#0F3D3E] font-bold py-4 rounded-2xl text-lg shadow-sm hover:shadow-md"
+                disabled={enrolling}
+                className="w-full bg-[#FFD166] hover:bg-[#e6ba56] transition-all duration-300 text-[#0F3D3E] font-bold py-4 rounded-2xl text-lg shadow-sm hover:shadow-md disabled:opacity-60"
               >
-                Enroll Now
+                {enrolling ? "Processing..." : "Enroll Now"}
               </button>
+
+              {message && (
+                <p className="mt-4 text-center font-medium text-[#0F3D3E]">
+                  {message}
+                </p>
+              )}
             </div>
           </div>
         </section>
 
-        {/* COURSE CONTENT */}
+        {showKidPicker && (
+          <section className="p-6 mb-10 bg-white border border-[#FFE7A8] shadow-sm rounded-3xl">
+            <h2 className="mb-2 text-2xl font-bold text-[#0F3D3E]">
+              Choose Child
+            </h2>
+
+            <p className="mb-5 text-sm text-gray-500">
+              Select which child should receive this course.
+            </p>
+
+            {kids.length === 0 ? (
+              <p className="text-gray-500">
+                You do not have any children yet. Add a child first.
+              </p>
+            ) : (
+              <div className="flex flex-col gap-4 md:flex-row">
+                <div className="relative flex-1">
+                  <button
+                    type="button"
+                    onClick={() => setDropdownOpen(!dropdownOpen)}
+                    className="
+                      w-full
+                      px-5 py-4 pr-12
+                      rounded-2xl
+                      border border-[#FFE1A3]
+                      bg-[#FFF9E8]
+                      text-[#0F3D3E]
+                      font-semibold
+                      shadow-sm
+                      outline-none
+                      transition-all duration-300
+                      hover:bg-[#FFF4D6]
+                      focus:ring-4 focus:ring-[#FFD166]/30
+                      focus:border-[#FFD166]
+                      cursor-pointer
+                      text-left
+                    "
+                  >
+                    {selectedKid
+                      ? selectedKid.child_name || selectedKid.username
+                      : "Select a child"}
+
+                    <span className="absolute right-5 top-1/2 -translate-y-1/2 text-[#B88700] text-lg">
+                      {dropdownOpen ? "▲" : "▼"}
+                    </span>
+                  </button>
+
+                  {dropdownOpen && (
+                    <div className="absolute z-40 w-full mt-2 overflow-hidden bg-[#FFF9E8] border border-[#FFE1A3] rounded-2xl shadow-lg">
+                      {kids.map((kid) => (
+                        <button
+                          key={kid.kid_id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedKidId(String(kid.kid_id));
+                            setDropdownOpen(false);
+                          }}
+                          className={`
+                            w-full text-left px-5 py-3
+                            font-semibold
+                            transition-all duration-200
+                            ${
+                              String(kid.kid_id) === String(selectedKidId)
+                                ? "bg-[#FFD166] text-[#0F3D3E]"
+                                : "bg-[#FFF9E8] text-[#0F3D3E] hover:bg-[#FFE7A8]"
+                            }
+                          `}
+                        >
+                          {kid.child_name || kid.username}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <button
+                  onClick={() => {
+                    if (!selectedKidId) {
+                      setMessage("Please select a child first.");
+                      return;
+                    }
+
+                    enrollCourseForKid(Number(selectedKidId), "/parent/dashboard");
+                  }}
+                  disabled={enrolling}
+                  className="px-6 py-4 bg-[#FFD166] hover:bg-[#e6ba56] text-[#0F3D3E] font-bold rounded-2xl transition disabled:opacity-60"
+                >
+                  {enrolling ? "Assigning..." : "Assign Course"}
+                </button>
+              </div>
+            )}
+          </section>
+        )}
+
         <section>
           <h2 className="text-3xl font-bold text-[#0F3D3E] mb-6">
             Course Content
@@ -173,9 +368,7 @@ export default function CourseDetailsPage() {
             <div className="space-y-5">
               {chapters.map((chapter, chapterIndex) => {
                 const isOpen = openChapter === chapter.chapter_id;
-
                 const lessonXP = getLessonXP(chapter.lessons.length);
-
                 const quizXP = getQuizXP();
 
                 return (
@@ -183,12 +376,9 @@ export default function CourseDetailsPage() {
                     key={chapter.chapter_id}
                     className="overflow-hidden bg-white border border-gray-100 shadow-md rounded-3xl"
                   >
-                    {/* CHAPTER HEADER */}
                     <button
                       onClick={() =>
-                        setOpenChapter(
-                          isOpen ? null : chapter.chapter_id
-                        )
+                        setOpenChapter(isOpen ? null : chapter.chapter_id)
                       }
                       className="w-full bg-[#E8F7F6] hover:bg-[#d7efed] transition-all duration-300 px-8 py-6 flex items-center justify-between text-left"
                     >
@@ -198,8 +388,8 @@ export default function CourseDetailsPage() {
                         </h3>
 
                         <p className="text-sm text-[#0F3D3E]/70 mt-1">
-                          {chapter.lessons.length} lessons + quiz •{" "}
-                          {chapterXP} XP
+                          {chapter.lessons.length} lessons + quiz • {chapterXP}{" "}
+                          XP
                         </p>
                       </div>
 
@@ -208,11 +398,9 @@ export default function CourseDetailsPage() {
                       </div>
                     </button>
 
-                    {/* DROPDOWN CONTENT */}
                     {isOpen && (
                       <div className="px-8 py-6 space-y-4 bg-white">
                         {chapter.lessons.map((lesson, lessonIndex) => {
-                          // ONLY Chapter 1 Lesson 1 & 2 unlocked
                           const isUnlocked =
                             chapterIndex === 0 && lessonIndex < 2;
 
@@ -238,8 +426,7 @@ export default function CourseDetailsPage() {
 
                                 <div>
                                   <h4 className="font-semibold text-[#0F3D3E] text-lg">
-                                    Lesson {lessonIndex + 1}:{" "}
-                                    {lesson.title}
+                                    Lesson {lessonIndex + 1}: {lesson.title}
                                   </h4>
 
                                   <p className="mt-1 text-sm text-gray-500">
@@ -262,7 +449,6 @@ export default function CourseDetailsPage() {
                           );
                         })}
 
-                        {/* QUIZ CARD */}
                         <div className="flex items-center justify-between p-5 bg-gray-100 border border-gray-200 rounded-2xl opacity-70">
                           <div className="flex items-center gap-4">
                             <div className="flex items-center justify-center text-lg font-bold text-gray-600 bg-gray-300 rounded-full w-11 h-11">
