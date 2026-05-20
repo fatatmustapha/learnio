@@ -44,7 +44,7 @@ export const getKidDashboard = async (req, res) => {
     const kid = kidRows[0];
     const totalXp = kid.xp_points || 0;
     const level = Math.floor(totalXp / 50) + 1;
-    const levelProgress = totalXp % 50;
+    const levelProgress = Math.min(totalXp % 50, 50);
 
     const [courses] = await db.query(
       `

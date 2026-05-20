@@ -37,6 +37,7 @@ const recalculateKidCourse = async (kidId, courseId) => {
   );
 
   const totalChapters = Number(totalChapterRows[0].totalChapters || 0);
+  const xpPerQuiz = totalChapters > 0 ? quizXPTotal / totalChapters : 0;
 
   const [bestQuizRows] = await db.query(
     `
@@ -100,31 +101,33 @@ const recalculateKidCourse = async (kidId, courseId) => {
     }
   }
 
-  const [allCourseRows] = await db.query(`SELECT course_id FROM courses`);
+  const [allCourseXpRows] = await db.query(
+    `
+    SELECT course_id
+    FROM courses
+    `
+  );
 
   let totalKidXP = 0;
 
-  for (const course of allCourseRows) {
+  for (const course of allCourseXpRows) {
+    const [courseProgressRows] = await db.query(
+      `
+      SELECT completed_lessons
+      FROM progress
+      WHERE kid_id = ? AND course_id = ?
+      `,
+      [kidId, course.course_id]
+    );
+
     const [courseLessonRows] = await db.query(
       `SELECT COUNT(*) AS totalLessons FROM lessons WHERE course_id = ?`,
       [course.course_id]
     );
 
     const totalCourseLessons = Number(courseLessonRows[0].totalLessons || 0);
-
-    const [completedCourseLessonRows] = await db.query(
-      `
-      SELECT COUNT(*) AS completedLessons
-      FROM lesson_completions lc
-      JOIN lessons l ON lc.lesson_id = l.lesson_id
-      WHERE lc.kid_id = ?
-      AND l.course_id = ?
-      `,
-      [kidId, course.course_id]
-    );
-
     const completedCourseLessons = Number(
-      completedCourseLessonRows[0].completedLessons || 0
+      courseProgressRows[0]?.completed_lessons || 0
     );
 
     const lessonXpForCourse =
@@ -138,6 +141,8 @@ const recalculateKidCourse = async (kidId, courseId) => {
     );
 
     const totalCourseChapters = Number(courseChapterRows[0].totalChapters || 0);
+    const quizXpPerCourseQuiz =
+      totalCourseChapters > 0 ? quizXPTotal / totalCourseChapters : 0;
 
     const [courseBestQuizRows] = await db.query(
       `
@@ -179,206 +184,88 @@ const recalculateKidCourse = async (kidId, courseId) => {
     level,
     progressPercent,
     completed,
+    completedLessons,
+    totalLessons,
+    xpPerLesson,
   };
 };
 
-export const getQuizByChapter = async (req, res) => {
+export const getLessonById = async (req, res) => {
   try {
-    const { chapterId } = req.params;
+    const { lessonId } = req.params;
 
-    const [quizRows] = await db.query(
-      `
-      SELECT quiz_id, title, passing_score, chapter_id, xp_reward
-      FROM quizzes
-      WHERE chapter_id = ?
-      LIMIT 1
-      `,
-      [chapterId]
-    );
-
-    if (quizRows.length === 0) {
-      return res.status(404).json({
-        message: "No quiz found for this chapter",
-      });
-    }
-
-    const quiz = quizRows[0];
-
-    const [questions] = await db.query(
+    const [rows] = await db.query(
       `
       SELECT 
-        question_id,
-        question_text,
-        option_a,
-        option_b,
-        option_c,
-        option_d
-      FROM quiz_questions
-      WHERE quiz_id = ?
-      ORDER BY question_id ASC
+        l.lesson_id,
+        l.title,
+        l.content,
+        l.video_url,
+        l.lesson_order,
+        l.chapter_id,
+        l.course_id,
+        c.title AS course_title,
+        ch.title AS chapter_title,
+        ch.chapter_order
+      FROM lessons l
+      JOIN courses c ON l.course_id = c.course_id
+      JOIN chapters ch ON l.chapter_id = ch.chapter_id
+      WHERE l.lesson_id = ?
       `,
-      [quiz.quiz_id]
+      [lessonId]
     );
 
-    res.json({
-      quiz,
-      questions,
-    });
+    if (rows.length === 0) {
+      return res.status(404).json({ message: "Lesson not found" });
+    }
+
+    res.json(rows[0]);
   } catch (error) {
-    console.error("GET QUIZ BY CHAPTER ERROR:", error);
+    console.error("GET LESSON ERROR:", error);
     res.status(500).json({ message: "Server error" });
   }
 };
 
-export const getCourseQuizStatus = async (req, res) => {
+export const completeLesson = async (req, res) => {
   try {
     const kidId = req.user.id;
-    const { courseId } = req.params;
+    const { lessonId } = req.params;
 
-    const [passedRows] = await db.query(
+    const [lessonRows] = await db.query(
       `
-      SELECT DISTINCT q.chapter_id
-      FROM quiz_attempts qa
-      JOIN quizzes q ON qa.quiz_id = q.quiz_id
-      JOIN chapters ch ON q.chapter_id = ch.chapter_id
-      WHERE qa.kid_id = ?
-      AND ch.course_id = ?
-      AND qa.passed = 1
+      SELECT lesson_id, course_id, chapter_id
+      FROM lessons
+      WHERE lesson_id = ?
       `,
-      [kidId, courseId]
+      [lessonId]
     );
 
-    res.json({
-      passedChapterIds: passedRows.map((row) => row.chapter_id),
-    });
-  } catch (error) {
-    console.error("GET COURSE QUIZ STATUS ERROR:", error);
-    res.status(500).json({ message: "Server error" });
-  }
-};
-
-export const submitQuiz = async (req, res) => {
-  try {
-    const kidId = req.user.id;
-    const { quiz_id, answers } = req.body;
-
-    if (!quiz_id || !Array.isArray(answers)) {
-      return res.status(400).json({
-        message: "quiz_id and answers are required",
-      });
+    if (lessonRows.length === 0) {
+      return res.status(404).json({ message: "Lesson not found" });
     }
 
-    const [quizRows] = await db.query(
-      `
-      SELECT 
-        q.quiz_id,
-        q.title,
-        q.passing_score,
-        q.chapter_id,
-        ch.course_id
-      FROM quizzes q
-      JOIN chapters ch ON q.chapter_id = ch.chapter_id
-      WHERE q.quiz_id = ?
-      `,
-      [quiz_id]
-    );
-
-    if (quizRows.length === 0) {
-      return res.status(404).json({ message: "Quiz not found" });
-    }
-
-    const quiz = quizRows[0];
-
-    const [questions] = await db.query(
-      `
-      SELECT question_id, correct_option
-      FROM quiz_questions
-      WHERE quiz_id = ?
-      `,
-      [quiz_id]
-    );
-
-    if (questions.length === 0) {
-      return res.status(400).json({
-        message: "This quiz has no questions",
-      });
-    }
-
-    let correctAnswers = 0;
-
-    questions.forEach((question) => {
-      const submittedAnswer = answers.find(
-        (answer) => Number(answer.question_id) === Number(question.question_id)
-      );
-
-      if (
-        submittedAnswer &&
-        String(submittedAnswer.selected_option).toUpperCase() ===
-          String(question.correct_option).toUpperCase()
-      ) {
-        correctAnswers++;
-      }
-    });
-
-    const totalQuestions = questions.length;
-    const score = (correctAnswers / totalQuestions) * 100;
-    const passed = score >= Number(quiz.passing_score);
-
-    const [chapterRows] = await db.query(
-      `
-      SELECT COUNT(*) AS totalChapters
-      FROM chapters
-      WHERE course_id = ?
-      `,
-      [quiz.course_id]
-    );
-
-    const totalChapters = Number(chapterRows[0].totalChapters || 1);
-    const quizXPPerChapter = (COURSE_TOTAL_XP * QUIZ_XP_PERCENT) / totalChapters;
-
-    const earnedXp = Number(
-      ((correctAnswers / totalQuestions) * quizXPPerChapter).toFixed(2)
-    );
-
-    const [previousBestRows] = await db.query(
-      `
-      SELECT COALESCE(MAX(earned_xp), 0) AS bestXp
-      FROM quiz_attempts
-      WHERE kid_id = ?
-      AND quiz_id = ?
-      `,
-      [kidId, quiz_id]
-    );
-
-    const previousBestXp = Number(previousBestRows[0].bestXp || 0);
-    const xpAdded = Math.max(earnedXp - previousBestXp, 0);
+    const lesson = lessonRows[0];
 
     await db.query(
       `
-      INSERT INTO quiz_attempts
-      (kid_id, quiz_id, score, passed, earned_xp)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT IGNORE INTO lesson_completions (kid_id, lesson_id)
+      VALUES (?, ?)
       `,
-      [kidId, quiz_id, score, passed ? 1 : 0, earnedXp]
+      [kidId, lessonId]
     );
 
-    const result = await recalculateKidCourse(kidId, quiz.course_id);
+    const result = await recalculateKidCourse(kidId, lesson.course_id);
 
     res.json({
-      message: passed
-        ? "Quiz submitted successfully"
-        : "You need to pass the quiz to complete this chapter",
-      correctAnswers,
-      totalQuestions,
-      score,
-      passed,
-      earnedXp,
-      previousBestXp,
-      xpAdded,
+      message: "Lesson completed successfully",
+      kid_id: kidId,
+      lesson_id: lesson.lesson_id,
+      course_id: lesson.course_id,
+      chapter_id: lesson.chapter_id,
       ...result,
     });
   } catch (error) {
-    console.error("SUBMIT QUIZ ERROR:", error);
+    console.error("COMPLETE LESSON ERROR:", error);
     res.status(500).json({ message: "Server error" });
   }
 };
