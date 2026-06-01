@@ -1,146 +1,219 @@
 import db from "../config/db.js";
 
-// ===============================
-// CREATE COURSE
-// ===============================
-export const createCourseAdmin = (req, res) => {
-  const { title, description, category, xp_reward } = req.body;
+export const getDashboardStats = async (req, res) => {
+  try {
+    const [parents] = await db.query("SELECT COUNT(*) AS total FROM parents");
+    const [kids] = await db.query("SELECT COUNT(*) AS total FROM kids");
+    const [courses] = await db.query("SELECT COUNT(*) AS total FROM courses");
+    const [enrollments] = await db.query("SELECT COUNT(*) AS total FROM progress");
 
-  if (!title || !description) {
-    return res.status(400).json({ message: "Missing data" });
+    res.json({
+      totalParents: parents[0].total,
+      totalKids: kids[0].total,
+      totalCourses: courses[0].total,
+      totalEnrollments: enrollments[0].total,
+    });
+  } catch (error) {
+    console.error("ADMIN DASHBOARD ERROR:", error);
+    res.status(500).json({ message: "Server error" });
   }
+};
 
-  const query = `
-    INSERT INTO courses (title, description, category, xp_reward)
-    VALUES (?, ?, ?, ?)
-  `;
+export const getAllCoursesAdmin = async (req, res) => {
+  try {
+    const [courses] = await db.query(`
+      SELECT c.*, COUNT(DISTINCT p.kid_id) AS enrolled_count
+      FROM courses c
+      LEFT JOIN progress p ON c.course_id = p.course_id
+      GROUP BY c.course_id
+      ORDER BY c.course_id DESC
+    `);
 
-  db.query(query, [title, description, category, xp_reward], (err) => {
-    if (err) return res.status(500).json({ message: "Error creating course" });
-
-    res.json({ message: "Course created successfully" });
-  });
-}
-// ===============================
-// CREATE LESSON
-// ===============================
-export const createLesson = (req, res) => {
-  const { course_id, title, content, lesson_order, xp_reward } = req.body;
-
-  if (!course_id || !title) {
-    return res.status(400).json({ message: "Missing data" });
+    res.json(courses);
+  } catch (error) {
+    console.error("GET ADMIN COURSES ERROR:", error);
+    res.status(500).json({ message: "Database error" });
   }
+};
 
-  const query = `
-    INSERT INTO lessons (course_id, title, content, lesson_order, xp_reward)
-    VALUES (?, ?, ?, ?, ?)
-  `;
+export const deleteLessonAdmin = async (req, res) => {
+  try {
+    const { lessonId } = req.params;
 
-  db.query(query, [course_id, title, content, lesson_order, xp_reward], (err) => {
-    if (err) return res.status(500).json({ message: "Error creating lesson" });
+    await db.query("DELETE FROM lesson_completions WHERE lesson_id = ?", [lessonId]);
+    await db.query("DELETE FROM lessons WHERE lesson_id = ?", [lessonId]);
 
-    res.json({ message: "Lesson created successfully" });
-  });
-}
-// ===============================
-// CREATE QUIZ
-// ===============================
-export const createQuiz = (req, res) => {
-  const { lesson_id, title, passing_score } = req.body;
-
-  if (!lesson_id) {
-    return res.status(400).json({ message: "Missing lesson ID" });
+    res.json({ message: "Lesson deleted successfully" });
+  } catch (error) {
+    console.error("DELETE LESSON ERROR:", error);
+    res.status(500).json({ message: "Error deleting lesson" });
   }
+};
 
-  const query = `
-    INSERT INTO quizzes (lesson_id, title, passing_score)
-    VALUES (?, ?, ?)
-  `;
+export const deleteQuizAdmin = async (req, res) => {
+  try {
+    const { quizId } = req.params;
 
-  db.query(query, [lesson_id, title, passing_score], (err) => {
-    if (err) return res.status(500).json({ message: "Error creating quiz" });
+    await db.query("DELETE FROM quiz_attempts WHERE quiz_id = ?", [quizId]);
+    await db.query("DELETE FROM quiz_questions WHERE quiz_id = ?", [quizId]);
+    await db.query("DELETE FROM quizzes WHERE quiz_id = ?", [quizId]);
 
-    res.json({ message: "Quiz created successfully" });
-  });
-}
-// ===============================
-// CREATE QUESTION
-// ===============================
-export const createQuestion = (req, res) => {
-  const {
-    quiz_id,
-    question_text,
-    option_a,
-    option_b,
-    option_c,
-    option_d,
-    correct_option,
-  } = req.body;
-
-  if (!quiz_id || !question_text) {
-    return res.status(400).json({ message: "Missing data" });
+    res.json({ message: "Quiz deleted successfully" });
+  } catch (error) {
+    console.error("DELETE QUIZ ERROR:", error);
+    res.status(500).json({ message: "Error deleting quiz" });
   }
+};
 
-  const query = `
-    INSERT INTO quiz_questions 
-    (quiz_id, question_text, option_a, option_b, option_c, option_d, correct_option)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `;
+export const deleteChapterAdmin = async (req, res) => {
+  const connection = await db.getConnection();
 
-  db.query(
-    query,
-    [quiz_id, question_text, option_a, option_b, option_c, option_d, correct_option],
-    (err) => {
-      if (err) return res.status(500).json({ message: "Error creating question" });
+  try {
+    const { chapterId } = req.params;
 
-      res.json({ message: "Question added successfully" });
+    await connection.beginTransaction();
+
+    const [quizzes] = await connection.query(
+      "SELECT quiz_id FROM quizzes WHERE chapter_id = ?",
+      [chapterId]
+    );
+
+    const [lessons] = await connection.query(
+      "SELECT lesson_id FROM lessons WHERE chapter_id = ?",
+      [chapterId]
+    );
+
+    for (const quiz of quizzes) {
+      await connection.query("DELETE FROM quiz_attempts WHERE quiz_id = ?", [quiz.quiz_id]);
+      await connection.query("DELETE FROM quiz_questions WHERE quiz_id = ?", [quiz.quiz_id]);
     }
-  );
-}
-// ===============================
-// GET ALL COURSES (ADMIN)
-// ===============================
-export const getAllCoursesAdmin = (req, res) => {
-  const query = "SELECT * FROM courses";
 
-  db.query(query, (err, results) => {
-    if (err) return res.status(500).json({ message: "Database error" });
-
-    res.json(results);
-  });
-}
-// ===============================
-// UPDATE COURSE
-// ===============================
-export const updateCourse = (req, res) => {
-  const { id } = req.params;
-  const { title, description, category, xp_reward } = req.body;
-
-  // Validation
-  if (!title || !description) {
-    return res.status(400).json({ message: "Missing data" });
-  }
-
-  const query = `
-    UPDATE courses
-    SET title = ?, description = ?, category = ?, xp_reward = ?
-    WHERE course_id = ?
-  `;
-
-  db.query(
-    query,
-    [title, description, category, xp_reward, id],
-    (err, result) => {
-      if (err) {
-        return res.status(500).json({ message: "Error updating course" });
-      }
-
-      // Check if course exists
-      if (result.affectedRows === 0) {
-        return res.status(404).json({ message: "Course not found" });
-      }
-
-      res.json({ message: "Course updated successfully" });
+    for (const lesson of lessons) {
+      await connection.query("DELETE FROM lesson_completions WHERE lesson_id = ?", [lesson.lesson_id]);
     }
-  );
+
+    await connection.query("DELETE FROM quizzes WHERE chapter_id = ?", [chapterId]);
+    await connection.query("DELETE FROM lessons WHERE chapter_id = ?", [chapterId]);
+    await connection.query("DELETE FROM chapters WHERE chapter_id = ?", [chapterId]);
+
+    await connection.commit();
+
+    res.json({ message: "Chapter deleted successfully" });
+  } catch (error) {
+    await connection.rollback();
+    console.error("DELETE CHAPTER ERROR:", error);
+    res.status(500).json({ message: "Error deleting chapter" });
+  } finally {
+    connection.release();
+  }
+};
+
+export const deleteCourseAdmin = async (req, res) => {
+  const connection = await db.getConnection();
+
+  try {
+    const { courseId } = req.params;
+
+    await connection.beginTransaction();
+
+    const [quizzes] = await connection.query(
+      `
+      SELECT q.quiz_id
+      FROM quizzes q
+      JOIN chapters ch ON q.chapter_id = ch.chapter_id
+      WHERE ch.course_id = ?
+      `,
+      [courseId]
+    );
+
+    const [lessons] = await connection.query(
+      "SELECT lesson_id FROM lessons WHERE course_id = ?",
+      [courseId]
+    );
+
+    for (const quiz of quizzes) {
+      await connection.query("DELETE FROM quiz_attempts WHERE quiz_id = ?", [quiz.quiz_id]);
+      await connection.query("DELETE FROM quiz_questions WHERE quiz_id = ?", [quiz.quiz_id]);
+    }
+
+    for (const lesson of lessons) {
+      await connection.query("DELETE FROM lesson_completions WHERE lesson_id = ?", [lesson.lesson_id]);
+    }
+
+    await connection.query(
+      `
+      DELETE q FROM quizzes q
+      JOIN chapters ch ON q.chapter_id = ch.chapter_id
+      WHERE ch.course_id = ?
+      `,
+      [courseId]
+    );
+
+    await connection.query("DELETE FROM lessons WHERE course_id = ?", [courseId]);
+    await connection.query("DELETE FROM chapters WHERE course_id = ?", [courseId]);
+    await connection.query("DELETE FROM progress WHERE course_id = ?", [courseId]);
+    await connection.query("DELETE FROM badges WHERE course_id = ?", [courseId]);
+    await connection.query("DELETE FROM courses WHERE course_id = ?", [courseId]);
+
+    await connection.commit();
+
+    res.json({ message: "Course deleted successfully" });
+  } catch (error) {
+    await connection.rollback();
+    console.error("DELETE COURSE ERROR:", error);
+    res.status(500).json({ message: "Error deleting course" });
+  } finally {
+    connection.release();
+  }
+};
+
+export const updateChapterAdmin = async (req, res) => {
+  try {
+    const { chapterId } = req.params;
+    const { title } = req.body;
+
+    await db.query("UPDATE chapters SET title = ? WHERE chapter_id = ?", [
+      title,
+      chapterId,
+    ]);
+
+    res.json({ message: "Chapter updated successfully" });
+  } catch (error) {
+    console.error("UPDATE CHAPTER ERROR:", error);
+    res.status(500).json({ message: "Error updating chapter" });
+  }
+};
+
+export const updateLessonAdmin = async (req, res) => {
+  try {
+    const { lessonId } = req.params;
+    const { title, video_url } = req.body;
+
+    await db.query(
+      "UPDATE lessons SET title = ?, video_url = ? WHERE lesson_id = ?",
+      [title, video_url, lessonId]
+    );
+
+    res.json({ message: "Lesson updated successfully" });
+  } catch (error) {
+    console.error("UPDATE LESSON ERROR:", error);
+    res.status(500).json({ message: "Error updating lesson" });
+  }
+};
+
+export const updateQuizAdmin = async (req, res) => {
+  try {
+    const { quizId } = req.params;
+    const { title } = req.body;
+
+    await db.query("UPDATE quizzes SET title = ? WHERE quiz_id = ?", [
+      title,
+      quizId,
+    ]);
+
+    res.json({ message: "Quiz updated successfully" });
+  } catch (error) {
+    console.error("UPDATE QUIZ ERROR:", error);
+    res.status(500).json({ message: "Error updating quiz" });
+  }
 };

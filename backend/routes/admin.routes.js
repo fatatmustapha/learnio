@@ -1,25 +1,47 @@
+import multer from "multer";
+import path from "path";
+
 import express from "express";
+
 import {
-  createCourseAdmin,
-  updateCourse, 
-  createLesson,
-  createQuiz,
-  createQuestion,
+  getDashboardStats,
   getAllCoursesAdmin,
+  deleteLessonAdmin,
+  deleteQuizAdmin,
+  deleteChapterAdmin,
+  deleteCourseAdmin,
+  updateChapterAdmin,
+  updateLessonAdmin,
+  updateQuizAdmin,
 } from "../controllers/admin.controller.js";
-import { verifyToken, verifyRole } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
 
-router.post("/course", verifyToken, verifyRole("admin"), createCourseAdmin);
+router.get("/dashboard-stats", getDashboardStats);
+router.get("/courses", getAllCoursesAdmin);
 
-router.put("/course/:id", verifyToken, verifyRole("admin"), updateCourse);
+router.delete("/courses/:courseId", deleteCourseAdmin);
+router.delete("/chapters/:chapterId", deleteChapterAdmin);
+router.delete("/lessons/:lessonId", deleteLessonAdmin);
+router.delete("/quizzes/:quizId", deleteQuizAdmin);
 
-router.get("/courses", verifyToken, verifyRole("admin"), getAllCoursesAdmin);
+router.put("/chapters/:chapterId", updateChapterAdmin);
+router.put("/lessons/:lessonId", updateLessonAdmin);
+router.put("/quizzes/:quizId", updateQuizAdmin);
 
-router.post("/lesson", verifyToken, verifyRole("admin"), createLesson);
+const storage = multer.diskStorage({
+  destination: "uploads/",
+  filename: (req, file, cb) => {
+    cb(null, Date.now() + path.extname(file.originalname));
+  },
+});
 
-router.post("/quiz", verifyToken, verifyRole("admin"), createQuiz);
+const upload = multer({ storage });
 
-router.post("/question", verifyToken, verifyRole("admin"), createQuestion);
+router.post("/upload-image", upload.single("image"), (req, res) => {
+  res.json({
+    image_url: `/uploads/${req.file.filename}`,
+  });
+});
+
 export default router;

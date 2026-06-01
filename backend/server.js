@@ -42,6 +42,7 @@ app.use("/api/kid", kidRoutes);
 app.use("/api/categories", categoryRoutes);
 app.use("/api/lessons", lessonRoutes);
 
+
 // TEST
 app.get("/", (req, res) => {
   res.send("Learnio API running");

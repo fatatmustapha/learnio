@@ -28,20 +28,38 @@ export default function Footer() {
 
           <ul className="space-y-3 text-[#134E4A] text-base font-semibold">
             <li>
-              <Link href="/" className="transition duration-200 hover:text-white">
+              <Link
+                href="/"
+                className="transition duration-200 hover:text-white"
+              >
                 Home
               </Link>
             </li>
 
             <li>
-              <Link href="/about" className="transition duration-200 hover:text-white">
+              <Link
+                href="/about"
+                className="transition duration-200 hover:text-white"
+              >
                 About
               </Link>
             </li>
 
             <li>
-              <Link href="/courses" className="transition duration-200 hover:text-white">
+              <Link
+                href="/courses"
+                className="transition duration-200 hover:text-white"
+              >
                 Courses
+              </Link>
+            </li>
+
+            <li>
+              <Link
+                href="/admin/login"
+                className="transition duration-200 hover:text-[#FFD166]"
+              >
+                Admin Portal
               </Link>
             </li>
           </ul>
