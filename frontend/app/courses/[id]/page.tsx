@@ -51,6 +51,12 @@ type User = {
   parent_id?: number;
 };
 
+type ParentKid = {
+  kid_id: number;
+  child_name: string;
+  username: string;
+};
+
 export default function CourseDetailsPage() {
   const params = useParams();
   const router = useRouter();
@@ -70,6 +76,10 @@ export default function CourseDetailsPage() {
 
   const [isEnrolled, setIsEnrolled] = useState(false);
   const [enrolling, setEnrolling] = useState(false);
+
+  const [parentKids, setParentKids] = useState<ParentKid[]>([]);
+  const [selectedKidId, setSelectedKidId] = useState<number | "">("");
+  const [kidDropdownOpen, setKidDropdownOpen] = useState(false);
 
   const [activeQuizChapterId, setActiveQuizChapterId] = useState<number | null>(
     null
@@ -91,6 +101,10 @@ export default function CourseDetailsPage() {
 
       if (parsedUser.role === "kid") {
         checkEnrollment(parsedUser.kid_id);
+      }
+
+      if (parsedUser.role === "parent") {
+        fetchParentKids(parsedUser.parent_id);
       }
     }
 
@@ -124,6 +138,39 @@ export default function CourseDetailsPage() {
       setCourse(null);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchParentKids = async (parentId?: number) => {
+    if (!parentId) return;
+
+    try {
+      const token = localStorage.getItem("token");
+
+      const res = await fetch(
+        `http://localhost:5000/api/parent/kids/${parentId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setMessage(data.message || "Could not load your kids.");
+        return;
+      }
+
+      setParentKids(Array.isArray(data) ? data : []);
+
+      if (Array.isArray(data) && data.length > 0) {
+        setSelectedKidId(data[0].kid_id);
+      }
+    } catch (error) {
+      console.error(error);
+      setMessage("Could not load your kids.");
     }
   };
 
@@ -188,13 +235,28 @@ export default function CourseDetailsPage() {
 
     const currentUser = JSON.parse(userRaw);
 
-    if (currentUser.role !== "kid") {
-      setMessage("Only a kid account can enroll directly from this page.");
-      return;
+    let kidIdToEnroll: number | undefined;
+
+    if (currentUser.role === "kid") {
+      kidIdToEnroll = currentUser.kid_id;
+
+      if (isEnrolled) {
+        setMessage("Course already enrolled.");
+        return;
+      }
     }
 
-    if (isEnrolled) {
-      setMessage("Course already enrolled.");
+    if (currentUser.role === "parent") {
+      if (!selectedKidId) {
+        setMessage("Please choose a child first.");
+        return;
+      }
+
+      kidIdToEnroll = Number(selectedKidId);
+    }
+
+    if (!kidIdToEnroll) {
+      setMessage("You must be logged in as a kid or parent.");
       return;
     }
 
@@ -208,7 +270,7 @@ export default function CourseDetailsPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          kid_id: currentUser.kid_id,
+          kid_id: kidIdToEnroll,
           course_id: Number(courseId),
         }),
       });
@@ -217,12 +279,19 @@ export default function CourseDetailsPage() {
 
       if (!res.ok) {
         setMessage(data.message || "Course already enrolled.");
-        setIsEnrolled(true);
         return;
       }
 
-      setIsEnrolled(true);
-      setMessage("Course enrolled successfully! It will now appear on your dashboard.");
+      if (currentUser.role === "kid") {
+        setIsEnrolled(true);
+        setMessage(
+          "Course enrolled successfully! It will now appear on your dashboard."
+        );
+      } else {
+        setMessage(
+          "Course assigned successfully! It will now appear on your child's dashboard."
+        );
+      }
     } catch (error) {
       console.error(error);
       setMessage("Could not enroll course.");
@@ -409,9 +478,9 @@ export default function CourseDetailsPage() {
   return (
     <main className="min-h-screen bg-[#FDF8F3] pt-32 px-6 pb-20">
       <div className="max-w-6xl mx-auto">
-        <section className="bg-white rounded-[32px] shadow-md border border-gray-100 overflow-hidden mb-10">
+        <section className="bg-white rounded-[32px] shadow-md border border-gray-100 overflow-visible mb-10">
           <div className="grid grid-cols-1 lg:grid-cols-2">
-            <div className="h-[420px] overflow-hidden">
+            <div className="h-[420px] overflow-hidden rounded-l-[32px]">
               <img
                 src={getImageUrl(course.image_url)}
                 alt={course.title}
@@ -448,23 +517,76 @@ export default function CourseDetailsPage() {
                 </div>
               </div>
 
+              {user?.role === "parent" && (
+                <div className="relative z-50 mt-8">
+                  <label className="block mb-3 text-base font-semibold text-[#0F3D3E]">
+                    Assign this course to:
+                  </label>
+
+                  <button
+                    type="button"
+                    onClick={() => setKidDropdownOpen(!kidDropdownOpen)}
+                    className="w-full rounded-3xl border-2 border-[#FFD166] bg-[#FFF9E8] px-6 py-4 text-left text-lg font-semibold text-[#0F3D3E] shadow-sm transition hover:border-[#e8bb52] focus:outline-none focus:ring-4 focus:ring-[#FFD166]/25 flex items-center justify-between"
+                  >
+                    <span>
+                      {parentKids.find((kid) => kid.kid_id === selectedKidId)
+                        ?.child_name || "Choose a child"}
+                    </span>
+
+                    <span className="text-[#0F3D3E] text-base">
+                      {kidDropdownOpen ? "▲" : "▼"}
+                    </span>
+                  </button>
+
+                  {kidDropdownOpen && (
+                    <div className="absolute left-0 right-0 z-50 mt-3 overflow-hidden rounded-3xl border-2 border-[#FFD166] bg-[#FFF9E8] shadow-xl">
+                      {parentKids.length === 0 ? (
+                        <div className="px-6 py-4 text-lg font-medium text-[#0F3D3E]">
+                          No children found
+                        </div>
+                      ) : (
+                        parentKids.map((kid) => (
+                          <button
+                            key={kid.kid_id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedKidId(kid.kid_id);
+                              setKidDropdownOpen(false);
+                            }}
+                            className={`w-full px-6 py-4 text-left text-lg font-medium transition ${
+                              selectedKidId === kid.kid_id
+                                ? "bg-[#FFD166] text-[#0F3D3E]"
+                                : "text-[#0F3D3E] hover:bg-[#e8bb52]"
+                            }`}
+                          >
+                            {kid.child_name}
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
               <button
                 onClick={enrollNow}
-                disabled={enrolling || isEnrolled}
+                disabled={enrolling || (user?.role === "kid" && isEnrolled)}
                 className={`mt-8 w-full transition text-[#0F3D3E] font-bold py-4 rounded-2xl ${
-                  isEnrolled
+                  user?.role === "kid" && isEnrolled
                     ? "bg-[#DCFCE7] text-[#166534] cursor-not-allowed"
                     : "bg-[#FFD166] hover:bg-[#e6ba56]"
                 }`}
               >
-                {isEnrolled
+                {user?.role === "kid" && isEnrolled
                   ? "Enrolled ✓"
                   : enrolling
-                  ? "Enrolling..."
+                  ? "Processing..."
+                  : user?.role === "parent"
+                  ? "Assign Course"
                   : "Enroll Now"}
               </button>
 
-              {isEnrolled && (
+              {user?.role === "kid" && isEnrolled && (
                 <p className="mt-3 text-center text-sm font-semibold text-[#166534]">
                   Course already enrolled.
                 </p>
@@ -567,7 +689,11 @@ export default function CourseDetailsPage() {
                                   : "bg-[#FFD166] hover:bg-[#e6ba56] text-[#0F3D3E]"
                               }`}
                             >
-                              {locked ? "Locked" : watched ? "Watched ✓" : "Watch"}
+                              {locked
+                                ? "Locked"
+                                : watched
+                                ? "Watched ✓"
+                                : "Watch"}
                             </button>
                           </div>
                         );
